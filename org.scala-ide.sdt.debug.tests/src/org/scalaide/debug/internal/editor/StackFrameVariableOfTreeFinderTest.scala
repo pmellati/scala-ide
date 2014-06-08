@@ -12,7 +12,7 @@ import org.scalaide.debug.internal.ScalaDebugRunningTest
 import org.scalaide.debug.internal.ScalaDebugger
 import org.scalaide.core.internal.jdt.model.ScalaCompilationUnit
 import org.scalaide.core.testsetup.SDTTestUtils
-import scala.reflect.internal.util.Position
+import scala.reflect.internal.util.{Position, OffsetPosition}
 import scala.util.Try
 
 object StackFrameVariableOfTreeFinderTest
@@ -60,7 +60,7 @@ class StackFrameVariableOfTreeFinderTest {
       def treeAtMarker(markerName: String): Tree = treeCache.getOrElseUpdate(markerName, {
         val positions = SDTTestUtils.positionsOf(src.content, s" /*{$markerName}*/")
         assertEquals(s"Couldn't find exactly one occurence of marker $markerName in ${src.path}.", 1, positions.size)
-        val markerPos = Position.offset(src, positions.head - 1)
+        val markerPos = new OffsetPosition(src, positions.head - 1)
 
         val resp = new Response[Tree]
         askTypeAt(markerPos, resp)

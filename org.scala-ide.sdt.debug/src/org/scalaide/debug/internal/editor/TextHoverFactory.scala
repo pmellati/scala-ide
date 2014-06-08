@@ -20,6 +20,7 @@ import org.eclipse.jface.text.IInformationControlCreator
 import org.eclipse.jface.text.DefaultInformationControl
 import org.eclipse.jdt.internal.debug.ui.ExpressionInformationControlCreator
 import org.eclipse.debug.core.model.IVariable
+import scala.reflect.internal.util.OffsetPosition
 
 class TextHoverFactory extends TextHoverFactoryInterface {
   def createFor(scu: ScalaCompilationUnit): ITextHover = new ScalaHover(scu) with ITextHoverExtension with ITextHoverExtension2 {
@@ -82,13 +83,13 @@ object StackFrameVariableOfTreeFinder {
     lazy val sfLineNumber = Try{stackFrame.getLineNumber}.filter(_ > 0).map(_ - 1).toOption
 
     lazy val stackFramePos = sfLineNumber.map {ln =>
-      Position.offset(src, src.skipWhitespace(src.lineToOffset(ln)))
+      new OffsetPosition(src, src.skipWhitespace(src.lineToOffset(ln)))
     }
 
-    def isStackFrameWithin(range: RangePosition) = (for {
-      stackFrameLineNum <- sfLineNumber
-      stackFramePos = Position.offset(src, src.lineToOffset(stackFrameLineNum))
-    } yield range.includes(stackFramePos)) getOrElse false
+    def isStackFrameWithin(range: RangePosition) = stackFramePos map {sfPos =>
+      range includes sfPos
+    } getOrElse false
+
 
     /** Here we use 'template' as an umbrella term to refer to any entity that exposes a 'this'
      *  variable in the stack frame. This 'this' variable will contain the fields of this template.
@@ -174,7 +175,11 @@ object StackFrameVariableOfTreeFinder {
     def findVariableFromFieldsOf(variable: IVariable, sym: Symbol, varMatcher: IVariable => Boolean = null) = {
       def stackFrameCompatibleNameOf(sym: Symbol): String = {  // Based on trial & error. May need more work.
         var name = sym.name.toTermName
-        if(sym.isLocalToThis) name = name.dropLocal
+        if(sym.hasLocalFlag) {
+          // name = name.dropLocal
+          // TODO: The commented line above can be used instead of the one below, when scala 2.10 support is dropped.
+          name = name.toTermName stripSuffix newTermName(" ")
+        }
         name.decoded
       }
 
@@ -242,7 +247,7 @@ object StackFrameVariableOfTreeFinder {
           }
         case Select(_, _) => None
         case _ =>
-          if(sym.isLocalToBlock) {
+          if(sym.isLocal) {
             findVariableFromLocalVars(sym) orElse
             //
             // In closures, local vars of enclosing methods are stored as fields with mangled names.
